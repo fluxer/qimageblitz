@@ -127,7 +127,7 @@ bool Blitz::grayscale(QImage &img, bool reduceDepth)
         }
         else{
             // 8bpp or 32bpp w/ no conversion
-            int count = img.depth() > 8 ? img.width()*img.height() : img.numColors();
+            int count = img.depth() > 8 ? img.width()*img.height() : img.colorCount();
 
             QVector<QRgb> cTable;
             if(img.depth() == 8)
@@ -201,7 +201,7 @@ bool Blitz::grayscale(QImage &img, bool reduceDepth)
         }
         else{
             // 8bpp or 32bpp w/ no conversion
-            int count = img.depth() > 8 ? img.width()*img.height() : img.numColors();
+            int count = img.depth() > 8 ? img.width()*img.height() : img.colorCount();
 
             QVector<QRgb> cTable;
             if(img.depth() == 8)
@@ -249,8 +249,8 @@ bool Blitz::invert(QImage &img, QImage::InvertMode mode)
 
         if(img.depth() <= 8){
             cTable = img.colorTable();
-            remainder = img.numColors() % 4;
-            count = img.numColors()-remainder;
+            remainder = img.colorCount() % 4;
+            count = img.colorCount()-remainder;
             data = (unsigned int *)cTable.data();
         }
         else{
@@ -311,7 +311,7 @@ QImage& Blitz::contrast(QImage &img, bool sharpen, int weight)
         data = (unsigned int *)img.scanLine(0);
     }
     else{
-        count = img.numColors();
+        count = img.colorCount();
         data = (unsigned int *)cTable.data();
     }
     end = data+count;
@@ -375,7 +375,7 @@ QImage& Blitz::intensity(QImage &img, float percent)
     unsigned int *data;
 
     if(img.format() == QImage::Format_Indexed8){
-        segmentColors = pixels = img.numColors();
+        segmentColors = pixels = img.colorCount();
         colorTable = img.colorTable();
         data = colorTable.data();
     }
@@ -565,7 +565,7 @@ QImage& Blitz::channelIntensity(QImage &img, float percent, RGBChannel channel)
     unsigned int *data;
 
     if(img.format() == QImage::Format_Indexed8){
-        segmentColors = pixels = img.numColors();
+        segmentColors = pixels = img.colorCount();
         colorTable = img.colorTable();
         data = colorTable.data();
     }
@@ -665,7 +665,7 @@ QImage& Blitz::desaturate(QImage &img, float desat)
         if(img.format() == QImage::Format_Indexed8){
             cTable = img.colorTable();
             data = (unsigned int *)cTable.data();
-            end = data + img.numColors();
+            end = data + img.colorCount();
 
         }
         else{
@@ -926,7 +926,7 @@ QImage& Blitz::fade(QImage &img, float val, const QColor &color)
     if(img.format() == QImage::Format_Indexed8){
         cTable = img.colorTable();
         data = (unsigned int *)cTable.data();
-        end = data + img.numColors();
+        end = data + img.colorCount();
 
     }
     else{
@@ -982,7 +982,7 @@ QImage& Blitz::flatten(QImage &img, const QColor &ca, const QColor &cb)
     if(img.format() == QImage::Format_Indexed8){
         cTable = img.colorTable();
         data = (unsigned int *)cTable.data();
-        end = data + img.numColors();
+        end = data + img.colorCount();
 
     }
     else{

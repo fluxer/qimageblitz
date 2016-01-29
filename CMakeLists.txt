@@ -1,7 +1,13 @@
 project(blitz)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules )
-find_package(Qt4 REQUIRED)
+option(WITH_KATIE "Build against Katie instead of Qt4" OFF)
+if(WITH_KATIE)
+   find_package(Katie)
+endif()
+if(NOT KATIE_FOUND)
+   find_package(Qt4 REQUIRED)
+endif()
 # properly set up compile flags (QT_DEBUG/QT_NO_DEBUG, ...)
 include(${QT_USE_FILE})
 

@@ -1,3 +1,19 @@
+0.0.7:
+
+* Assembly is no longer used for images transformation, is was supported only
+on i386 with MMX CPU extension and some vendors even disabled patched it out
+
+* CMake 2.8.12 is the minimum version required to build the project now, this
+allowed to unbundle the CMake module for Qt4 which CMake developers now
+maintain upstream
+
+* Added support for building against Katie
+
+* Blitz is now part of the Katana project
+
+For a detailed changelog see the Git code browser at:
+https://github.com/fluxer/qimageblitz
+
 0.0.4:
 
 * Blitz is now part of kdesupport. This tarball is a snapshot intended for

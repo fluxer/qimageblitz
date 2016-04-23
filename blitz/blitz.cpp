@@ -64,8 +64,6 @@ ImageMagick Studio.
 
 #include "qimageblitz.h"
 #include "private/blitz_p.h"
-#include <config-processor.h>
-#include "blitzcpu.h"
 #include "private/interpolate.h"
 #include "private/inlinehsv.h"
 #include <cmath>
@@ -76,12 +74,6 @@ ImageMagick Studio.
 #include <string.h>
 #include <QVector>
 #include <QColor>
-
-#if defined(__i386__) && ( defined(__GNUC__) || defined(__INTEL_COMPILER) )
-#  if defined(HAVE_MMX )
-#    define USE_MMX_INLINE_ASM
-#  endif
-#endif
 
 QImage& Blitz::despeckle(QImage &img)
 {
@@ -422,307 +414,61 @@ QImage Blitz::edge(QImage &img)
     QRgb *dest;
     QRgb *s, *scanblock[3];
 
-
-#ifdef USE_MMX_INLINE_ASM
-#ifdef __GNUC__
-#warning Using MMX sobel edge
-#endif
-    if(BlitzCPUInfo::haveExtension(BlitzCPUInfo::MMX)){
-        int xmatrix[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
-        int ymatrix[] = {1, 2, 1, 0, 0, 0, -1, -2, -1};
-        int i, *xm, *ym;
-
-        for(y=0; y < h; ++y){
-            scanblock[1] = (QRgb *)img.scanLine(y);
-            dest = (QRgb *)buffer.scanLine(y);
-            if(y == 0){
-                scanblock[0] = (QRgb *)img.scanLine(y);
-                scanblock[2] = (QRgb *)img.scanLine(y+1);
-            }
-            else if(y == h-1){
-                scanblock[0] = (QRgb *)img.scanLine(y-1);
-                scanblock[2]  = (QRgb *)img.scanLine(y);
-            }
-            else{
-                scanblock[0] = (QRgb *)img.scanLine(y-1);
-                scanblock[2] = (QRgb *)img.scanLine(y+1);
-            }
-            //
-            // x == 0, double over first pixel
-            //
-            __asm__ __volatile__
-                ("pxor %%mm7, %%mm7\n\t" // used for unpacking
-                 "pxor %%mm5, %%mm5\n\t" // clear accumulator
-                 "pxor %%mm6, %%mm6\n\t" // ""
-                 : : );
-            for(i=0, xm=xmatrix, ym=ymatrix; i < 3; ++i, xm+=3, ym+=3){
-                s = scanblock[i];
-                __asm__ __volatile__
-                    (// first pixel
-                     "movd (%0), %%mm0\n\t" // load pixel into mm0
-                     "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                     "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                     "movq %%mm0, %%mm4\n\t" // and mm4 since we are doubling over
-                     "movd 0(%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd 0(%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     // second pixel (doubled over)
-                     "movq %%mm4, %%mm1\n\t" // copy saved pixel to mm1
-                     "movd 4(%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd 4(%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm4\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm4, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     // third pixel
-                     "movd 4(%0), %%mm0\n\t" // load pixel into mm0
-                     "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                     "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                     "movd 8(%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd 8(%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     : : "r"(s), "r"(xm), "r"(ym));
-            }
-            __asm__ __volatile__
-                (// calculate abs, sum, and write
-                 "movq %%mm5, %%mm0\n\t" // calculate abs of x accumulator
-                 "psraw $15, %%mm0\n\t"
-                 "pxor %%mm0, %%mm5\n\t"
-                 "psubw %%mm0, %%mm5\n\t"
-                 "movq %%mm6, %%mm0\n\t" // calculate abs of y accumulator
-                 "psraw $15, %%mm0\n\t"
-                 "pxor %%mm0, %%mm6\n\t"
-                 "psubw %%mm0, %%mm6\n\t"
-                 "paddw %%mm5, %%mm6\n\t" // add together
-                 "packuswb %%mm6, %%mm6\n\t" // and write
-                 "movd %%mm6, (%0)\n\t"
-                 : : "r"(dest));
-            dest++;
-
-            //
-            // Now x == 1, process middle of image
-            //
-
-            for(x=1; x < w-1; ++x){
-                __asm__ __volatile__
-                    ("pxor %%mm5, %%mm5\n\t" // clear accumulator
-                     "pxor %%mm6, %%mm6\n\t"
-                     : : );
-                for(i=0, xm=xmatrix, ym=ymatrix; i < 3; ++i, xm+=3, ym+=3){
-                    s = scanblock[i];
-                    __asm__ __volatile__
-                        (// first pixel
-                         "movd (%0), %%mm0\n\t" // load pixel into mm0
-                         "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                         "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                         "movd (%1), %%mm2\n\t" // load x matrix into mm2
-                         "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                         "packssdw %%mm2, %%mm2\n\t"
-                         "movd (%2), %%mm3\n\t" // load y matrix into mm3
-                         "punpckldq %%mm3, %%mm3\n\t" // expand
-                         "packssdw %%mm3, %%mm3\n\t"
-                         "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                         "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                         "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                         "paddw %%mm1, %%mm6\n\t"
-                         // second pixel
-                         "movd 4(%0), %%mm0\n\t" // load pixel into mm0
-                         "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                         "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                         "movd 4(%1), %%mm2\n\t" // load x matrix into mm2
-                         "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                         "packssdw %%mm2, %%mm2\n\t"
-                         "movd 4(%2), %%mm3\n\t" // load y matrix into mm3
-                         "punpckldq %%mm3, %%mm3\n\t" // expand
-                         "packssdw %%mm3, %%mm3\n\t"
-                         "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                         "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                         "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                         "paddw %%mm1, %%mm6\n\t"
-                         // third pixel
-                         "movd 8(%0), %%mm0\n\t" // load pixel into mm0
-                         "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                         "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                         "movd 8(%1), %%mm2\n\t" // load x matrix into mm2
-                         "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                         "packssdw %%mm2, %%mm2\n\t"
-                         "movd 8(%2), %%mm3\n\t" // load y matrix into mm3
-                         "punpckldq %%mm3, %%mm3\n\t" // expand
-                         "packssdw %%mm3, %%mm3\n\t"
-                         "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                         "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                         "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                         "paddw %%mm1, %%mm6\n\t"
-                         : : "r"(s), "r"(xm), "r"(ym));
-                }
-                __asm__ __volatile__
-                    (// calculate abs, sum, and write
-                     "movq %%mm5, %%mm0\n\t" // calculate abs of x accumulator
-                     "psraw $15, %%mm0\n\t"
-                     "pxor %%mm0, %%mm5\n\t"
-                     "psubw %%mm0, %%mm5\n\t"
-                     "movq %%mm6, %%mm0\n\t" // calculate abs of y accumulator
-                     "psraw $15, %%mm0\n\t"
-                     "pxor %%mm0, %%mm6\n\t"
-                     "psubw %%mm0, %%mm6\n\t"
-                     "paddw %%mm5, %%mm6\n\t" // add together
-                     "packuswb %%mm6, %%mm6\n\t" // and write
-                     "movd %%mm6, (%0)\n\t"
-                     : : "r"(dest));
-                dest++;
-                ++scanblock[0], ++scanblock[1], ++scanblock[2];
-            }
-
-            //
-            // x = w-1, double over last pixel
-            //
-
-            __asm__ __volatile__
-                ("pxor %%mm5, %%mm5\n\t" // clear accumulator
-                 "pxor %%mm6, %%mm6\n\t"
-                 : : );
-            for(i=0, xm=xmatrix, ym=ymatrix; i < 3; ++i, xm+=3, ym+=3){
-                s = scanblock[i];
-                __asm__ __volatile__
-                    (// first pixel
-                     "movd (%0), %%mm0\n\t" // load pixel into mm0
-                     "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                     "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                     "movd (%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd (%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     // second pixel
-                     "movd 4(%0), %%mm0\n\t" // load pixel into mm0
-                     "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                     "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                     "movd 4(%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd 4(%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     // third pixel
-                     "movd 4(%0), %%mm0\n\t" // load pixel into mm0
-                     "punpcklbw %%mm7, %%mm0\n\t" // upgrade to quad
-                     "movq %%mm0, %%mm1\n\t" // copy pixel to mm1
-                     "movd 8(%1), %%mm2\n\t" // load x matrix into mm2
-                     "punpckldq %%mm2, %%mm2\n\t" // expand to all words
-                     "packssdw %%mm2, %%mm2\n\t"
-                     "movd 8(%2), %%mm3\n\t" // load y matrix into mm3
-                     "punpckldq %%mm3, %%mm3\n\t" // expand
-                     "packssdw %%mm3, %%mm3\n\t"
-                     "pmullw %%mm2, %%mm0\n\t" // multiply pixel w/ x matrix
-                     "pmullw %%mm3, %%mm1\n\t" // and multiply copy w/ y matrix
-                     "paddw %%mm0, %%mm5\n\t"  // add to accumulators
-                     "paddw %%mm1, %%mm6\n\t"
-                     : : "r"(s), "r"(xm), "r"(ym));
-            }
-            __asm__ __volatile__
-                (// calculate abs, sum, and write
-                 "movq %%mm5, %%mm0\n\t" // calculate abs of x accumulator
-                 "psraw $15, %%mm0\n\t"
-                 "pxor %%mm0, %%mm5\n\t"
-                 "psubw %%mm0, %%mm5\n\t"
-                 "movq %%mm6, %%mm0\n\t" // calculate abs of y accumulator
-                 "psraw $15, %%mm0\n\t"
-                 "pxor %%mm0, %%mm6\n\t"
-                 "psubw %%mm0, %%mm6\n\t"
-                 "paddw %%mm5, %%mm6\n\t" // add together
-                 "packuswb %%mm6, %%mm6\n\t" // and write
-                 "movd %%mm6, (%0)\n\t"
-                 : : "r"(dest));
-            dest++;
+    int xR, xG, xB, yR, yG, yB;
+    for(y=0; y < h; ++y){
+        scanblock[1] = (QRgb *)img.scanLine(y);
+        dest = (QRgb *)buffer.scanLine(y);
+        if(y == 0){
+            scanblock[0] = (QRgb *)img.scanLine(y);
+            scanblock[2] = (QRgb *)img.scanLine(y+1);
         }
-        __asm__ __volatile__ ("emms\n\t" : :);
-    }
-    else
-#endif
-    {
-        int xR, xG, xB, yR, yG, yB;
-        for(y=0; y < h; ++y){
-            scanblock[1] = (QRgb *)img.scanLine(y);
-            dest = (QRgb *)buffer.scanLine(y);
-            if(y == 0){
-                scanblock[0] = (QRgb *)img.scanLine(y);
-                scanblock[2] = (QRgb *)img.scanLine(y+1);
-            }
-            else if(y == h-1){
-                scanblock[0] = (QRgb *)img.scanLine(y-1);
-                scanblock[2]  = (QRgb *)img.scanLine(y);
-            }
-            else{
-                scanblock[0] = (QRgb *)img.scanLine(y-1);
-                scanblock[2] = (QRgb *)img.scanLine(y+1);
-            }
+        else if(y == h-1){
+            scanblock[0] = (QRgb *)img.scanLine(y-1);
+            scanblock[2]  = (QRgb *)img.scanLine(y);
+        }
+        else{
+            scanblock[0] = (QRgb *)img.scanLine(y-1);
+            scanblock[2] = (QRgb *)img.scanLine(y+1);
+        }
 
-            // x == 0, double over first pixel
+        // x == 0, double over first pixel
+        xR = xG = xB = yR = yG = yB = 0;
+        s = scanblock[0];
+        SOBEL(-1, 1, *s); SOBEL(0, 2, *s); ++s; SOBEL(1, 1, *s);
+        s = scanblock[1];
+        SOBEL(-2, 0, *s); SOBEL(0, 0, *s); ++s; SOBEL(2, 0, *s);
+        s = scanblock[2];
+        SOBEL(-1, -1, *s); SOBEL(0, -2, *s); ++s; SOBEL(1, -1, *s);
+        xR = qAbs(xR)+qAbs(yR); xG = qAbs(xG)+qAbs(yG);
+        xB = qAbs(xB)+qAbs(yB);
+        *dest++ = qRgb(qMin(xR, 255), qMin(xG, 255), qMin(xB, 255));
+
+        // x == 1, process middle of image
+        for(x=1; x < w-1; ++x){
             xR = xG = xB = yR = yG = yB = 0;
             s = scanblock[0];
-            SOBEL(-1, 1, *s); SOBEL(0, 2, *s); ++s; SOBEL(1, 1, *s);
+            SOBEL(-1, 1, *s); ++s; SOBEL(0, 2, *s); ++s; SOBEL(1, 1, *s);
             s = scanblock[1];
-            SOBEL(-2, 0, *s); SOBEL(0, 0, *s); ++s; SOBEL(2, 0, *s);
+            SOBEL(-2, 0, *s); ++s; SOBEL(0, 0, *s); ++s; SOBEL(2, 0, *s);
             s = scanblock[2];
-            SOBEL(-1, -1, *s); SOBEL(0, -2, *s); ++s; SOBEL(1, -1, *s);
-            xR = qAbs(xR)+qAbs(yR); xG = qAbs(xG)+qAbs(yG);
-            xB = qAbs(xB)+qAbs(yB);
-            *dest++ = qRgb(qMin(xR, 255), qMin(xG, 255), qMin(xB, 255));
-
-            // x == 1, process middle of image
-            for(x=1; x < w-1; ++x){
-                xR = xG = xB = yR = yG = yB = 0;
-                s = scanblock[0];
-                SOBEL(-1, 1, *s); ++s; SOBEL(0, 2, *s); ++s; SOBEL(1, 1, *s);
-                s = scanblock[1];
-                SOBEL(-2, 0, *s); ++s; SOBEL(0, 0, *s); ++s; SOBEL(2, 0, *s);
-                s = scanblock[2];
-                SOBEL(-1, -1, *s); ++s; SOBEL(0, -2, *s); ++s; SOBEL(1, -1, *s);
-                ++scanblock[0]; ++scanblock[1]; ++scanblock[2];
-                xR = qAbs(xR)+qAbs(yR); xG = qAbs(xG)+qAbs(yG);
-                xB = qAbs(xB)+qAbs(yB);
-                *dest++ = qRgb(qMin(xR, 255), qMin(xG, 255), qMin(xB, 255));
-            }
-
-            // x == w-1, double over last pixel
-            xR = xG = xB = yR = yG = yB = 0;
-            s = scanblock[0];
-            SOBEL(-1, 1, *s); ++s; SOBEL(0, 2, *s); SOBEL(1, 1, *s);
-            s = scanblock[1];
-            SOBEL(-2, 0, *s); ++s; SOBEL(0, 0, *s); SOBEL(2, 0, *s);
-            s = scanblock[2];
-            SOBEL(-1, -1, *s); ++s; SOBEL(0, -2, *s); SOBEL(1, -1, *s);
+            SOBEL(-1, -1, *s); ++s; SOBEL(0, -2, *s); ++s; SOBEL(1, -1, *s);
+            ++scanblock[0]; ++scanblock[1]; ++scanblock[2];
             xR = qAbs(xR)+qAbs(yR); xG = qAbs(xG)+qAbs(yG);
             xB = qAbs(xB)+qAbs(yB);
             *dest++ = qRgb(qMin(xR, 255), qMin(xG, 255), qMin(xB, 255));
         }
+
+        // x == w-1, double over last pixel
+        xR = xG = xB = yR = yG = yB = 0;
+        s = scanblock[0];
+        SOBEL(-1, 1, *s); ++s; SOBEL(0, 2, *s); SOBEL(1, 1, *s);
+        s = scanblock[1];
+        SOBEL(-2, 0, *s); ++s; SOBEL(0, 0, *s); SOBEL(2, 0, *s);
+        s = scanblock[2];
+        SOBEL(-1, -1, *s); ++s; SOBEL(0, -2, *s); SOBEL(1, -1, *s);
+        xR = qAbs(xR)+qAbs(yR); xG = qAbs(xG)+qAbs(yG);
+        xB = qAbs(xB)+qAbs(yB);
+        *dest++ = qRgb(qMin(xR, 255), qMin(xG, 255), qMin(xB, 255));
     }
     return(buffer);
 }

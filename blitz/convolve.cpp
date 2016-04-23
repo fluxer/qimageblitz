@@ -56,20 +56,12 @@ ImageMagick Studio.
 
 #include "qimageblitz.h"
 #include "private/blitz_p.h"
-#include <config-processor.h>
-#include "blitzcpu.h"
 #include <cmath>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef HAVE_STDINT_H
   #include <stdint.h>
-#endif
-
-#if defined(__i386__) && ( defined(__GNUC__) || defined(__INTEL_COMPILER) )
-#  if defined(HAVE_MMX )
-#    define USE_MMX_INLINE_ASM
-#  endif
 #endif
 
 #define M_EPSILON 1.0e-6
@@ -138,289 +130,80 @@ QImage Blitz::convolve(QImage &img, int matrix_size, float *matrix)
     }
 
     // apply
-
-#ifdef USE_MMX_INLINE_ASM
-#ifdef __GNUC__
-#warning Using MMX floating point convolve
-#endif
-    if(BlitzCPUInfo::haveExtension(BlitzCPUInfo::AMD3DNOW) &&
-       BlitzCPUInfo::haveExtension(BlitzCPUInfo::IntegerSSE)){
-        //
-        //
-        // MMX/3dnow version
-        //
-        //
-
-        __asm__ __volatile__
-            ("pxor %%mm7, %%mm7\n\t" : :); // clear for unpacking
-        for(y=0; y < h; ++y){
-            dest = (QRgb *)buffer.scanLine(y);
-            src = (QRgb *)img.scanLine(y);
-            // Read in scanlines to pixel neighborhood. If the scanline is outside
-            // the image use the top or bottom edge.
-            for(x=y-edge, i=0; x <= y+edge; ++i, ++x){
-                scanblock[i] = (QRgb *)
-                    img.scanLine((x < 0) ? 0 : (x > h-1) ? h-1 : x);
-            }
-            // Now we are about to start processing scanlines. First handle the
-            // part where the pixel neighborhood extends off the left edge.
-            for(x=0; x-edge < 0 ; ++x){
-                m = normalize_matrix;
-                __asm__ __volatile__
-                    ("pxor %%mm0, %%mm0\n\t"
-                     "pxor %%mm1, %%mm1\n\t"
-                     : :);
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y];
-                    matrix_x = -edge;
-                    while(x+matrix_x < 0){
-                        __asm__ __volatile__
-                            ("movd (%0), %%mm2\n\t" // mm2: m doubleword
-                             "punpckldq %%mm2, %%mm2\n\t"
-                             "movd (%1), %%mm3\n\t" // load pixel
-                             "punpcklbw %%mm7, %%mm3\n\t"
-                             "pshufw $0xE4, %%mm3, %%mm4\n\t"
-                             "punpcklwd %%mm7, %%mm3\n\t" // mm3: BG
-                             "punpckhwd %%mm7, %%mm4\n\t" // mm4: RA
-
-                             "pi2fd %%mm3, %%mm3\n\t" // convert to fp...
-                             "pi2fd %%mm4, %%mm4\n\t"
-                             "pfmul %%mm2, %%mm3\n\t" // ...and multiply
-                             "pfmul %%mm2, %%mm4\n\t"
-
-                             "pfadd %%mm3, %%mm0\n\t" // add to accumulator
-                             "pfadd %%mm4, %%mm1\n\t"
-                             : : "r"(m), "r"(s));
-                        ++matrix_x; ++m;
-                    }
-                    while(matrix_x <= edge){
-                        __asm__ __volatile__
-                            ("movd (%0), %%mm2\n\t" // mm2: m doubleword
-                             "punpckldq %%mm2, %%mm2\n\t"
-                             "movd (%1), %%mm3\n\t" // load pixel
-                             "punpcklbw %%mm7, %%mm3\n\t"
-                             "pshufw $0xE4, %%mm3, %%mm4\n\t"
-                             "punpcklwd %%mm7, %%mm3\n\t" // mm3: BG
-                             "punpckhwd %%mm7, %%mm4\n\t" // mm4: RA
-
-                             "pi2fd %%mm3, %%mm3\n\t" // convert to fp...
-                             "pi2fd %%mm4, %%mm4\n\t"
-                             "pfmul %%mm2, %%mm3\n\t" // ...and multiply
-                             "pfmul %%mm2, %%mm4\n\t"
-
-                             "pfadd %%mm3, %%mm0\n\t" // add to accumulator
-                             "pfadd %%mm4, %%mm1\n\t"
-                             : : "r"(m), "r"(s));
-                        ++matrix_x; ++m; ++s;
-                    }
-                }
-                __asm__ __volatile__
-                    ("pf2id %%mm0, %%mm0\n\t"
-                     "pf2id %%mm1, %%mm1\n\t"
-
-                     "packssdw %%mm0, %%mm1\n\t"
-                     "pshufw $0x4E, %%mm1, %%mm1\n\t"
-                     "packuswb %%mm7, %%mm1\n\t"
-                     "movd %%mm1, (%0)\n\t"
-                     : : "r"(dest));
-                *dest = BlitzPrivate::setAlpha(*dest, qAlpha(*src++));
-                ++dest;
-            }
-            // Okay, now process the middle part where the entire neighborhood
-            // is on the image.
-            for(; x+edge < w; ++x){
-                m = normalize_matrix;
-                __asm__ __volatile__
-                    ("pxor %%mm0, %%mm0\n\t"
-                     "pxor %%mm1, %%mm1\n\t"
-                     : :);
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y] + (x-edge);
-                    for(matrix_x = -edge; matrix_x <= edge; ++matrix_x, ++m, ++s){
-                        __asm__ __volatile__
-                            ("movd (%0), %%mm2\n\t" // mm2: m doubleword
-                             "punpckldq %%mm2, %%mm2\n\t"
-                             "movd (%1), %%mm3\n\t" // load pixel
-                             "punpcklbw %%mm7, %%mm3\n\t"
-                             "pshufw $0xE4, %%mm3, %%mm4\n\t"
-                             "punpcklwd %%mm7, %%mm3\n\t" // mm3: BG
-                             "punpckhwd %%mm7, %%mm4\n\t" // mm4: RA
-
-                             "pi2fd %%mm3, %%mm3\n\t" // convert to fp...
-                             "pi2fd %%mm4, %%mm4\n\t"
-                             "pfmul %%mm2, %%mm3\n\t" // ...and multiply
-                             "pfmul %%mm2, %%mm4\n\t"
-
-                             "pfadd %%mm3, %%mm0\n\t" // add to accumulator
-                             "pfadd %%mm4, %%mm1\n\t"
-                             : : "r"(m), "r"(s));
-                    }
-                }
-                __asm__ __volatile__
-                    ("pf2id %%mm0, %%mm0\n\t"
-                     "pf2id %%mm1, %%mm1\n\t"
-
-                     "packssdw %%mm0, %%mm1\n\t"
-                     "pshufw $0x4E, %%mm1, %%mm1\n\t"
-                     "packuswb %%mm7, %%mm1\n\t"
-                     "movd %%mm1, (%0)\n\t"
-                     : : "r"(dest));
-                *dest = BlitzPrivate::setAlpha(*dest, qAlpha(*src++));
-                ++dest;
-            }
-            // Finally process the right part where the neighborhood extends off
-            // the right edge of the image
-            for(; x < w; ++x){
-                m = normalize_matrix;
-                __asm__ __volatile__
-                    ("pxor %%mm0, %%mm0\n\t"
-                     "pxor %%mm1, %%mm1\n\t"
-                     : :);
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y];
-                    s += x-edge;
-                    matrix_x = -edge;
-                    while(x+matrix_x < w){
-                        __asm__ __volatile__
-                            ("movd (%0), %%mm2\n\t" // mm2: m doubleword
-                             "punpckldq %%mm2, %%mm2\n\t"
-                             "movd (%1), %%mm3\n\t" // load pixel
-                             "punpcklbw %%mm7, %%mm3\n\t"
-                             "pshufw $0xE4, %%mm3, %%mm4\n\t"
-                             "punpcklwd %%mm7, %%mm3\n\t" // mm3: BG
-                             "punpckhwd %%mm7, %%mm4\n\t" // mm4: RA
-
-                             "pi2fd %%mm3, %%mm3\n\t" // convert to fp...
-                             "pi2fd %%mm4, %%mm4\n\t"
-                             "pfmul %%mm2, %%mm3\n\t" // ...and multiply
-                             "pfmul %%mm2, %%mm4\n\t"
-
-                             "pfadd %%mm3, %%mm0\n\t" // add to accumulator
-                             "pfadd %%mm4, %%mm1\n\t"
-                             : : "r"(m), "r"(s));
-                        ++matrix_x, ++m, ++s;
-                    }
-                    --s;
-                    while(matrix_x <= edge){
-                        __asm__ __volatile__
-                            ("movd (%0), %%mm2\n\t" // mm2: m doubleword
-                             "punpckldq %%mm2, %%mm2\n\t"
-                             "movd (%1), %%mm3\n\t" // load pixel
-                             "punpcklbw %%mm7, %%mm3\n\t"
-                             "pshufw $0xE4, %%mm3, %%mm4\n\t"
-                             "punpcklwd %%mm7, %%mm3\n\t" // mm3: BG
-                             "punpckhwd %%mm7, %%mm4\n\t" // mm4: RA
-
-                             "pi2fd %%mm3, %%mm3\n\t" // convert to fp...
-                             "pi2fd %%mm4, %%mm4\n\t"
-                             "pfmul %%mm2, %%mm3\n\t" // ...and multiply
-                             "pfmul %%mm2, %%mm4\n\t"
-
-                             "pfadd %%mm3, %%mm0\n\t" // add to accumulator
-                             "pfadd %%mm4, %%mm1\n\t"
-                             : : "r"(m), "r"(s));
-                        ++matrix_x, ++m;
-                    }
-                }
-                __asm__ __volatile__
-                    ("pf2id %%mm0, %%mm0\n\t"
-                     "pf2id %%mm1, %%mm1\n\t"
-
-                     "packssdw %%mm0, %%mm1\n\t"
-                     "pshufw $0x4E, %%mm1, %%mm1\n\t"
-                     "packuswb %%mm7, %%mm1\n\t"
-                     "movd %%mm1, (%0)\n\t"
-                     : : "r"(dest));
-                *dest = BlitzPrivate::setAlpha(*dest, qAlpha(*src++));
-                ++dest;
-            }
+    float r, g, b;
+    for(y=0; y < h; ++y){
+        src = (QRgb *)img.scanLine(y);
+        dest = (QRgb *)buffer.scanLine(y);
+        // Read in scanlines to pixel neighborhood. If the scanline is outside
+        // the image use the top or bottom edge.
+        for(x=y-edge, i=0; x <= y+edge; ++i, ++x){
+            scanblock[i] = (QRgb *)
+                img.scanLine((x < 0) ? 0 : (x > h-1) ? h-1 : x);
         }
-        __asm__ __volatile__ ("emms\n\t" : :);
-    }
-    else
-#endif
-    {
-        //
-        //
-        // Non-MMX version
-        //
-        //
-
-        float r, g, b;
-        for(y=0; y < h; ++y){
-            src = (QRgb *)img.scanLine(y);
-            dest = (QRgb *)buffer.scanLine(y);
-            // Read in scanlines to pixel neighborhood. If the scanline is outside
-            // the image use the top or bottom edge.
-            for(x=y-edge, i=0; x <= y+edge; ++i, ++x){
-                scanblock[i] = (QRgb *)
-                    img.scanLine((x < 0) ? 0 : (x > h-1) ? h-1 : x);
-            }
-            // Now we are about to start processing scanlines. First handle the
-            // part where the pixel neighborhood extends off the left edge.
-            for(x=0; x-edge < 0 ; ++x){
-                r = g = b = 0.0;
-                m = normalize_matrix;
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y];
-                    matrix_x = -edge;
-                    while(x+matrix_x < 0){
-                        CONVOLVE_ACC(*m, *s);
-                        ++matrix_x; ++m;
-                    }
-                    while(matrix_x <= edge){
-                        CONVOLVE_ACC(*m, *s);
-                        ++matrix_x; ++m; ++s;
-                    }
+        // Now we are about to start processing scanlines. First handle the
+        // part where the pixel neighborhood extends off the left edge.
+        for(x=0; x-edge < 0 ; ++x){
+            r = g = b = 0.0;
+            m = normalize_matrix;
+            for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
+                s = scanblock[matrix_y];
+                matrix_x = -edge;
+                while(x+matrix_x < 0){
+                    CONVOLVE_ACC(*m, *s);
+                    ++matrix_x; ++m;
                 }
-                r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
-                g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
-                b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
-                *dest++ = qRgba((unsigned char)r, (unsigned char)g,
-                                (unsigned char)b, qAlpha(*src++));
-            }
-            // Okay, now process the middle part where the entire neighborhood
-            // is on the image.
-            for(; x+edge < w; ++x){
-                m = normalize_matrix;
-                r = g = b = 0.0;
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y] + (x-edge);
-                    for(matrix_x = -edge; matrix_x <= edge; ++matrix_x, ++m, ++s){
-                        CONVOLVE_ACC(*m, *s);
-                    }
+                while(matrix_x <= edge){
+                    CONVOLVE_ACC(*m, *s);
+                    ++matrix_x; ++m; ++s;
                 }
-                r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
-                g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
-                b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
-                *dest++ = qRgba((unsigned char)r, (unsigned char)g,
-                                (unsigned char)b, qAlpha(*src++));
             }
-            // Finally process the right part where the neighborhood extends off
-            // the right edge of the image
-            for(; x < w; ++x){
-                r = g = b = 0.0;
-                m = normalize_matrix;
-                for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
-                    s = scanblock[matrix_y];
-                    s += x-edge;
-                    matrix_x = -edge;
-                    while(x+matrix_x < w){
-                        CONVOLVE_ACC(*m, *s);
-                        ++matrix_x, ++m, ++s;
-                    }
-                    --s;
-                    while(matrix_x <= edge){
-                        CONVOLVE_ACC(*m, *s);
-                        ++matrix_x, ++m;
-                    }
+            r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
+            g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
+            b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
+            *dest++ = qRgba((unsigned char)r, (unsigned char)g,
+                            (unsigned char)b, qAlpha(*src++));
+        }
+        // Okay, now process the middle part where the entire neighborhood
+        // is on the image.
+        for(; x+edge < w; ++x){
+            m = normalize_matrix;
+            r = g = b = 0.0;
+            for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
+                s = scanblock[matrix_y] + (x-edge);
+                for(matrix_x = -edge; matrix_x <= edge; ++matrix_x, ++m, ++s){
+                    CONVOLVE_ACC(*m, *s);
                 }
-                r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
-                g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
-                b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
-                *dest++ = qRgba((unsigned char)r, (unsigned char)g,
-                                (unsigned char)b, qAlpha(*src++));
             }
+            r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
+            g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
+            b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
+            *dest++ = qRgba((unsigned char)r, (unsigned char)g,
+                            (unsigned char)b, qAlpha(*src++));
+        }
+        // Finally process the right part where the neighborhood extends off
+        // the right edge of the image
+        for(; x < w; ++x){
+            r = g = b = 0.0;
+            m = normalize_matrix;
+            for(matrix_y = 0; matrix_y < matrix_size; ++matrix_y){
+                s = scanblock[matrix_y];
+                s += x-edge;
+                matrix_x = -edge;
+                while(x+matrix_x < w){
+                    CONVOLVE_ACC(*m, *s);
+                    ++matrix_x, ++m, ++s;
+                }
+                --s;
+                while(matrix_x <= edge){
+                    CONVOLVE_ACC(*m, *s);
+                    ++matrix_x, ++m;
+                }
+            }
+            r = r < 0.0 ? 0.0 : r > 255.0 ? 255.0 : r+0.5;
+            g = g < 0.0 ? 0.0 : g > 255.0 ? 255.0 : g+0.5;
+            b = b < 0.0 ? 0.0 : b > 255.0 ? 255.0 : b+0.5;
+            *dest++ = qRgba((unsigned char)r, (unsigned char)g,
+                            (unsigned char)b, qAlpha(*src++));
         }
     }
 

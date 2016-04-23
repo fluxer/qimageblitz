@@ -352,7 +352,7 @@ QImage Blitz::oilPaint(QImage &img, float radius,
     int i, x, y, w, h, matrix_x, matrix_y;
     int edge = matrix_size/2;
     unsigned int max, value;
-    QRgb *dest, *src, *s, **scanblock;
+    QRgb *dest, *s, **scanblock;
 
     w = img.width();
     h = img.height();
@@ -374,7 +374,6 @@ QImage Blitz::oilPaint(QImage &img, float radius,
     unsigned int *histogram = new unsigned int[256];
 
     for(y=0; y < h; ++y){
-        src = (QRgb *)img.scanLine(y);
         dest = (QRgb *)buffer.scanLine(y);
         // Read in scanlines to pixel neighborhood. If the scanline is outside
         // the image use the top or bottom edge.

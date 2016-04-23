@@ -90,7 +90,6 @@ QImage Blitz::convolve(QImage &img, int matrix_size, float *matrix)
     int edge = matrix_size/2;
     QRgb *dest, *src, *s, **scanblock;
     float *m, *normalize_matrix, normalize;
-    bool overflow = false;
 
     if(!(matrix_size % 2)){
         qWarning("Blitz::convolve(): kernel width must be an odd number!");
@@ -125,8 +124,6 @@ QImage Blitz::convolve(QImage &img, int matrix_size, float *matrix)
     normalize = 1.0/normalize;
     for(i=0; i < matrix_size*matrix_size; ++i){
         normalize_matrix[i] = normalize*matrix[i];
-        if(normalize_matrix[i] < 0.0)
-            overflow = true;
     }
 
     // apply
@@ -723,7 +720,7 @@ float* BlitzPrivate::getBlurKernel(int &kernel_width, float sigma)
     long i;
 
     if(sigma == 0.0)
-        return(false);
+        return 0;
     if(kernel_width == 0)
         kernel_width = 3;
 

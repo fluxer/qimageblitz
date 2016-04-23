@@ -73,21 +73,6 @@ public:
      */
     static bool grayscale(QImage &img, bool reduceDepth=false);
     /**
-     * A fast smoothscale method with MMX support.
-     *
-     * @param img The image to smoothscale.
-     * @param sz The size to scale to.
-     * @param aspectRatio What aspect ratio to use, if any.
-     * @return The processed image. The original is not changed.
-     * @author Daniel M. Duley (mosfet)
-     */
-    static QImage smoothScale(QImage &img, const QSize &sz,
-                              Qt::AspectRatioMode aspectRatio =
-                              Qt::IgnoreAspectRatio);
-    static QImage smoothScale(QImage &img, int dw, int dh,
-                              Qt::AspectRatioMode aspectRatio =
-                              Qt::IgnoreAspectRatio);
-    /**
      * Smoothscales an image using a high-quality filter.
      *
      * @param img The image to smoothscale.

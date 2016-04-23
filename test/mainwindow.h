@@ -46,7 +46,6 @@ private slots:
     void slotEmboss();
     void slotAntialias();
 
-    void slotSmoothscale();
     void slotSmoothscaleFiltered();
 
     void slotModulate();

@@ -87,7 +87,6 @@ BlitzMainWindow::BlitzMainWindow()
     effectMnu->addAction(tr("Emboss"), this, SLOT(slotEmboss()));
     effectMnu->addSeparator();
 
-    effectMnu->addAction(tr("Smoothscale (MMX)..."), this, SLOT(slotSmoothscale()));
     effectMnu->addAction(tr("Smoothscale Filtered..."), this, SLOT(slotSmoothscaleFiltered()));
     effectMnu->addSeparator();
     effectMnu->addAction(tr("Modulate..."), this, SLOT(slotModulate()));
@@ -296,16 +295,6 @@ void BlitzMainWindow::slotAntialias()
     img = Blitz::antialias(img);
     lbl->setPixmap(QPixmap::fromImage(img));
     lbl->update();
-}
-
-void BlitzMainWindow::slotSmoothscale()
-{
-    ScaleDialog dlg(img.width(), img.height(), false, this);
-    if(dlg.exec() == QDialog::Accepted){
-        img = Blitz::smoothScale(img, dlg.resultWidth(), dlg.resultHeight());
-        lbl->setPixmap(QPixmap::fromImage(img));
-        lbl->resize(lbl->sizeHint());
-    }
 }
 
 void BlitzMainWindow::slotSmoothscaleFiltered()

@@ -22,7 +22,7 @@ SET(BLITZ_LIB_PATCH_VERSION "0")
 SET(BLITZ_LIB_VERSION_STRING "${BLITZ_LIB_MAJOR_VERSION}.${BLITZ_LIB_MINOR_VERSION}.${BLITZ_LIB_PATCH_VERSION}")
 
 set(blitz_LIB_SRCS blitz.cpp colors.cpp convolve.cpp histogram.cpp
-                   scale.cpp scalefilter.cpp gradient.cpp)
+                   scalefilter.cpp gradient.cpp)
 
 if(COMMAND cmake_policy)
       cmake_policy(SET CMP0003 NEW)

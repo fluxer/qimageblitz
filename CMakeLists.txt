@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 
 project(blitz)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules )
 find_package(Katie QUIET)
 if(NOT KATIE_FOUND)
    find_package(Qt4 REQUIRED)

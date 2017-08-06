@@ -2,8 +2,8 @@
 #define __SCALEDIALOG_H
 
 #include <QtGui/QDialog>
-class QSpinBox;
-class QComboBox;
+#include <QSpinBox>
+#include <QComboBox>
 
 class ScaleDialog : public QDialog
 {

@@ -4,8 +4,8 @@
 #include <QMainWindow>
 #include <QImage>
 
-class QLabel;
-class QCheckBox;
+#include <QLabel>
+#include <QCheckBox>
 
 class BlitzMainWindow : public QMainWindow
 {

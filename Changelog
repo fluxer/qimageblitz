@@ -1,7 +1,7 @@
 0.0.7:
 
-* Assembly is no longer used for images transformation, is was supported only
-on i386 with MMX CPU extension and some vendors even disabled patched it out
+* Assembly is no longer used for images transformation, it was supported only
+on i386 with MMX CPU extension and some vendors even disabled/patched it out
 
 * CMake 2.8.12 is the minimum version required to build the project now, this
 allowed to unbundle the CMake module for Qt4 which CMake developers now

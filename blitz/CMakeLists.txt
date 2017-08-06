@@ -1,10 +1,10 @@
-project(blitz_lib) 
+project(blitz_lib)
 
 include(CheckIncludeFile)
 
 include_directories(
-    ${CMAKE_SOURCE_DIR}  
-    ${blitz_lib_BINARY_DIR} 
+    ${CMAKE_SOURCE_DIR}
+    ${blitz_lib_BINARY_DIR}
 )
 
 check_include_file(stdint.h HAVE_STDINT_H)
@@ -34,10 +34,10 @@ set_target_properties(qimageblitz PROPERTIES
 )
 
 install(
-    TARGETS qimageblitz  
-    RUNTIME DESTINATION ${BIN_INSTALL_DIR} 
-    LIBRARY DESTINATION ${LIB_INSTALL_DIR} 
-    ARCHIVE DESTINATION ${LIB_INSTALL_DIR} 
+    TARGETS qimageblitz
+    RUNTIME DESTINATION ${BIN_INSTALL_DIR}
+    LIBRARY DESTINATION ${LIB_INSTALL_DIR}
+    ARCHIVE DESTINATION ${LIB_INSTALL_DIR}
 )
 
 install(
@@ -47,7 +47,7 @@ install(
 )
 
 if(NOT WIN32)
-    configure_file("qimageblitz.pc.cmake" "${CMAKE_CURRENT_BINARY_DIR}/qimageblitz.pc" @ONLY) 
+    configure_file("qimageblitz.pc.cmake" "${CMAKE_CURRENT_BINARY_DIR}/qimageblitz.pc" @ONLY)
 
     install(
         FILES ${CMAKE_CURRENT_BINARY_DIR}/qimageblitz.pc

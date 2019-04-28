@@ -2,7 +2,10 @@ cmake_minimum_required(VERSION 2.8.12 FATAL_ERROR)
 
 project(blitz)
 
-find_package(Katie QUIET)
+option(WITH_KATIE "Build against Katie instead of Qt4" ON)
+if(WITH_KATIE)
+    find_package(Katie QUIET)
+endif()
 if(NOT KATIE_FOUND)
    find_package(Qt4 REQUIRED)
 endif()

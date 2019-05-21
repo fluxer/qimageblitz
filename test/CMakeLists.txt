@@ -8,8 +8,6 @@ include_directories(
 
 set(blitztest_SRCS main.cpp mainwindow.cpp scaledialog.cpp)
 
-qt4_automoc(${blitztest_SRCS})
-
 add_executable(blitztest ${blitztest_SRCS})
 
 target_link_libraries(blitztest ${QT_QTCORE_LIBRARY} ${QT_QTGUI_LIBRARY} qimageblitz)
